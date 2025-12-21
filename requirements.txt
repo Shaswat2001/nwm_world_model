@@ -1,2 +1,6 @@
 torch
 PyYAML
+timm
+diffusers
+accelerate
+wandb

@@ -5,7 +5,7 @@ results_dir: logs
 train: True
 batch_size: 16
 num_workers: 12
-model: CDiT-XL/2
+model: CDiT-S/2
 lr: 8e-5
 
 # normalization for the action space
@@ -24,23 +24,23 @@ len_traj_pred: 64
 # dataset specific parameters
 image_size: 224
 datasets:
-  recon:
-    data_folder: data/recon
-    train: data_splits/recon/train/ # path to train folder with traj_names.txt
-    test: data_splits/recon/test/ # path to test folder with traj_names.txt
-    goals_per_obs: 4
-  tartan_drive:
-    data_folder: data/tartan
-    train: data_splits/tartan_drive/train/
-    test: data_splits/tartan_drive/test/
-    goals_per_obs: 4
+  # recon:
+  #   data_folder: data/recon
+  #   train: data_splits/recon/train/ # path to train folder with traj_names.txt
+  #   test: data_splits/recon/test/ # path to test folder with traj_names.txt
+  #   goals_per_obs: 4
+  # tartan_drive:
+  #   data_folder: data/tartan
+  #   train: data_splits/tartan_drive/train/
+  #   test: data_splits/tartan_drive/test/
+  #   goals_per_obs: 4
   sacson:
     data_folder: data/sacson
-    train: data_splits/sacson/train
-    test: data_splits/sacson/test
+    train: data_split/sacson/train
+    test: data_split/sacson/test
     goals_per_obs: 4
-  scand:
-    data_folder: data/scand
-    train: data_splits/scand/train
-    test: data_splits/scand/test
-    goals_per_obs: 4
+  # scand:
+  #   data_folder: data/scand
+  #   train: data_splits/scand/train
+  #   test: data_splits/scand/test
+  #   goals_per_obs: 4

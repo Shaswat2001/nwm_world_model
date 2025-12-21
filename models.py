@@ -10,7 +10,8 @@ def modulate(x, shift, scale):
 
 class TimeStepEmbedder(nn.Module):
 
-    def __init__(self, hidden_size: int, frequency_emb_size: int):
+    def __init__(self, hidden_size: int, frequency_emb_size: int = 256):
+        super().__init__()
 
         self.mlp = nn.Sequential(
             nn.Linear(frequency_emb_size, hidden_size, bias=True),
@@ -41,7 +42,8 @@ class TimeStepEmbedder(nn.Module):
     
 class ActionStepEmbedder(nn.Module):
 
-    def __init__(self, hidden_size: int, frequency_emb_size: int):
+    def __init__(self, hidden_size: int, frequency_emb_size: int= 256):
+        super().__init__()
 
         dim = hidden_size // 3
         self.x_embedder = TimeStepEmbedder(dim, frequency_emb_size)
@@ -157,14 +159,14 @@ class CDiT(nn.Module):
 
 
         # Initialize action embedding:
-        nn.init.normal_(self.y_embedder.x_emb.mlp[0].weight, std=0.02)
-        nn.init.normal_(self.y_embedder.x_emb.mlp[2].weight, std=0.02)
+        nn.init.normal_(self.y_embedder.x_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.y_embedder.x_embedder.mlp[2].weight, std=0.02)
 
-        nn.init.normal_(self.y_embedder.y_emb.mlp[0].weight, std=0.02)
-        nn.init.normal_(self.y_embedder.y_emb.mlp[2].weight, std=0.02)
+        nn.init.normal_(self.y_embedder.y_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.y_embedder.y_embedder.mlp[2].weight, std=0.02)
 
-        nn.init.normal_(self.y_embedder.angle_emb.mlp[0].weight, std=0.02)
-        nn.init.normal_(self.y_embedder.angle_emb.mlp[2].weight, std=0.02)
+        nn.init.normal_(self.y_embedder.yaw_embedder.mlp[0].weight, std=0.02)
+        nn.init.normal_(self.y_embedder.yaw_embedder.mlp[2].weight, std=0.02)
 
         # Initialize timestep embedding MLP:
         nn.init.normal_(self.t_embedder.mlp[0].weight, std=0.02)
@@ -219,3 +221,24 @@ class CDiT(nn.Module):
         x = self.final_layer(x, c)
         x = self.unpatchify(x)
         return x
+
+
+def CDiT_XL_2(**kwargs):
+    return CDiT(depth=28, hidden_size=1152, patch_size=2, num_heads=16, **kwargs)
+
+def CDiT_L_2(**kwargs):
+    return CDiT(depth=24, hidden_size=1024, patch_size=2, num_heads=16, **kwargs)
+
+def CDiT_B_2(**kwargs):
+    return CDiT(depth=12, hidden_size=768, patch_size=2, num_heads=12, **kwargs)
+
+def CDiT_S_2(**kwargs):
+    return CDiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, **kwargs)
+
+
+CDiT_models = {
+    'CDiT-XL/2': CDiT_XL_2, 
+    'CDiT-L/2':  CDiT_L_2, 
+    'CDiT-B/2':  CDiT_B_2, 
+    'CDiT-S/2':  CDiT_S_2
+}

@@ -1,8 +1,10 @@
 import os
+import torch
 import numpy as np
 from PIL import Image
 from torchvision import transforms
-
+from collections import OrderedDict
+import torchvision.transforms.functional as F
 IMAGE_ASPECT_RATIO = (4 / 3)  # all images are centered cropped to a 4:3 aspect ratio in training
 
 def get_image_path(data_folder, traj_name, t):
@@ -15,9 +17,9 @@ class CenterCropAR:
     def __call__(self, img: Image.Image):
         w, h = img.size
         if w > h:
-            img = TF.center_crop(img, (h, int(h * self.ar)))
+            img = F.center_crop(img, (h, int(h * self.ar)))
         else:
-            img = TF.center_crop(img, (int(w / self.ar), w))
+            img = F.center_crop(img, (int(w / self.ar), w))
         return img
 
 transform = transforms.Compose([
@@ -77,3 +79,18 @@ def to_local_coords(
         raise ValueError
 
     return (positions - curr_pos).dot(rotmat)
+
+@torch.no_grad()
+def update_target_networks(target_model, model, tau:float = 0.9999):
+
+    target_params = OrderedDict(target_model.model_parameters())
+    params = OrderedDict(model.model_parameters())
+
+    for name, param in params.items():
+        name = name.replace("_orig_mod.", "")
+        target_params[name].mul_(tau).add_(param.data, alpha=1 - tau)
+
+def requires_grad(model, flag=True):
+
+    for p in model.parameters():
+        p.requires_grad = flag
