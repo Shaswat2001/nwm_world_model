@@ -83,11 +83,10 @@ def to_local_coords(
 @torch.no_grad()
 def update_target_networks(target_model, model, tau:float = 0.9999):
 
-    target_params = OrderedDict(target_model.model_parameters())
-    params = OrderedDict(model.model_parameters())
+    target_params = OrderedDict(target_model.named_parameters())
+    params = OrderedDict(model.named_parameters())
 
     for name, param in params.items():
-        name = name.replace("_orig_mod.", "")
         target_params[name].mul_(tau).add_(param.data, alpha=1 - tau)
 
 def requires_grad(model, flag=True):

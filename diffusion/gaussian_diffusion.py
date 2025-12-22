@@ -87,7 +87,7 @@ class GaussianDiffusion:
             model_output, model_variance = torch.split(model_output, C, dim= 1)
 
             log1 = extract_tensor_from_value(np.log(self.schedular.betas), t, x.shape)
-            log2 = extract_tensor_from_value(np.log(self.schedular.posterior_log_variance_clipped), t, x.shape)
+            log2 = extract_tensor_from_value(self.schedular.posterior_log_variance_clipped, t, x.shape)
 
             fraction = (model_variance + 1) / 2.0
             log_variance = fraction * log1 + (1 - fraction) * log2
@@ -165,8 +165,8 @@ class GaussianDiffusion:
 
         # At the first timestep return the decoder NLL,
         # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
-        output = torch.where((t == 0), decoder_nll, kl)
-        return {"output": output, "pred_xstart": output["pred_xstart"]}
+        loss = torch.where((t == 0), decoder_nll, kl)
+        return {"output": loss, "pred_xstart": output["pred_xstart"]}
 
     def diffusion_loss(self, model, x_start, t, model_kwargs= None, noise= None):
 

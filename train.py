@@ -150,7 +150,7 @@ def main(args):
             loss.backward()
             opt.step()
             
-            update_target_networks(target_model, model.module)
+            update_target_networks(target_model, model)
 
             global_step += 1
             running_loss += loss.item()
