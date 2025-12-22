@@ -3,8 +3,8 @@ from pathlib import Path
 
 import torch
 import numpy as np
-from schedular import schedulars
-from diffusion_utils import extract_tensor_from_value
+from diffusion.schedular import schedulars
+from diffusion.diffusion_utils import extract_tensor_from_value, gaussian_kl, mean_flat, discretized_gaussian_log_likelihood
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -17,6 +17,7 @@ class GaussianDiffusion:
             self.config = yaml.safe_load(f)
 
         self.schedular = schedulars[self.config["schedular"]["type"]](**self.config["schedular"])
+        self.diffusion_steps = self.config["schedular"]["diffusion_steps"]
 
     def q_mean_variance(self, x_start, t):
 
@@ -131,7 +132,7 @@ class GaussianDiffusion:
 
         assert isinstance(shape, (tuple, list))
 
-        timesteps = list(reversed(range(self.config["schedular"]["diffusion_steps"])))
+        timesteps = list(reversed(range(self.diffusion_steps)))
 
         if noise is None:
             img = torch.randn_like(*shape, dtype=torch.float32)
@@ -144,8 +145,55 @@ class GaussianDiffusion:
             img = output["sample"]
 
         return img
-
     
+    def variational_lower_bound(self, model, x_start, x_t, t, denoised_clip=True, model_kwargs=None):
+
+        true_mean, true_variance, true_log_variance = self.q_posterior_mean_variance(x_t, x_start, t)
+
+        output = self.p_mean_variance(model, x_t, t, denoised_clip, None, model_kwargs)
+
+        kl = gaussian_kl(
+            true_mean, true_log_variance, output["mean"], output["log_variance"]
+        )
+        kl = mean_flat(kl) / np.log(2.0)
+
+        decoder_nll = -discretized_gaussian_log_likelihood(
+            x_start, means=output["mean"], log_scales=0.5 * output["log_variance"]
+        )
+        assert decoder_nll.shape == x_start.shape
+        decoder_nll = mean_flat(decoder_nll) / np.log(2.0)
+
+        # At the first timestep return the decoder NLL,
+        # otherwise return KL(q(x_{t-1}|x_t,x_0) || p(x_{t-1}|x_t))
+        output = torch.where((t == 0), decoder_nll, kl)
+        return {"output": output, "pred_xstart": output["pred_xstart"]}
+
+    def diffusion_loss(self, model, x_start, t, model_kwargs= None, noise= None):
+
+        if model_kwargs is None:
+            model_kwargs = {}
+        if noise is None:
+            noise = torch.randn_like(x_start)
+        x_t = self.q_sample(x_start, t, noise=noise)
+
+        terms = {}
+
+        if self.config["loss_type"] == "kl" or self.config["loss_type"] == "rescaled_kl":
+            terms["loss"] = self.variational_lower_bound(
+                model=model,
+                x_start=x_start,
+                x_t=x_t,
+                t=t,
+                denoised_clip=False,
+                model_kwargs=model_kwargs,
+            )["output"]
+            if self.config["loss_type"] == "rescaled_kl":
+                terms["loss"] *= self.diffusion_steps
+
+        else:
+            raise NotImplementedError(self.config["loss_type"])
+
+        return terms
 
         
         

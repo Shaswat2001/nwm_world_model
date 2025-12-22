@@ -11,7 +11,7 @@ from diffusers.models import AutoencoderKL
 import torch
 from torch.utils.data import DataLoader, ConcatDataset
 
-from diffusion_orig import create_diffusion
+from diffusion import GaussianDiffusion
 from utils import requires_grad, update_target_networks, transform
 
 def main(args):
@@ -52,7 +52,7 @@ def main(args):
     lr = float(config.get('lr', 1e-4))
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0)
 
-    diffusion = create_diffusion(timestep_respacing="")  
+    diffusion = GaussianDiffusion()
 
     train_dataset = []
     test_dataset = []
@@ -121,7 +121,7 @@ def main(args):
     running_loss = 0
     global_step = 0
     for epoch in range(args.epochs):
-
+        print(f"Running epoch : {epoch}")
         for x, y, rel_t in loader:
             x = x.to(device, non_blocking=True)
             y = y.to(device, non_blocking=True)
@@ -141,9 +141,9 @@ def main(args):
             y = y.flatten(0, 1)
             rel_t = rel_t.flatten(0, 1)
             
-            t = torch.randint(0, diffusion.num_timesteps, (x_start.shape[0],), device=device)
+            t = torch.randint(0, diffusion.diffusion_steps, (x_start.shape[0],), device=device)
             model_kwargs = dict(y=y, x_cond=x_cond, rel_t=rel_t)
-            loss_dict = diffusion.training_losses(model, x_start, t, model_kwargs)
+            loss_dict = diffusion.diffusion_loss(model, x_start, t, model_kwargs)
             loss = loss_dict["loss"].mean()
 
             opt.zero_grad()
