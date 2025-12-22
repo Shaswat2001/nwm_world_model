@@ -74,7 +74,7 @@ class GaussianDiffusion:
             model_kwargs = {}
 
         B, C = x.shape[:2]
-        model_output = model(x, t, model_kwargs)
+        model_output = model(x, t, **model_kwargs)
 
         if isinstance(model_output, tuple):
             model_output, extra = model_output
@@ -84,20 +84,22 @@ class GaussianDiffusion:
         if self.config["sigma"] == "learned" or self.config["sigma"] == "learned_scaled":
             assert model_output.shape == (B, 2*C, *x.shape[2:])
             model_output, model_variance = torch.split(model_output, C, dim= 1)
-            log1 = extract_tensor_from_value(np.log(self.schedular.betas), t, x.shape)
-            log2 = extract_tensor_from_value(self.schedular.posterior_log_variance_clipped, t, x.shape)
 
-            fraction = (model_variance + 1)/ 2.0
+            log1 = extract_tensor_from_value(np.log(self.schedular.betas), t, x.shape)
+            log2 = extract_tensor_from_value(np.log(self.schedular.posterior_log_variance_clipped), t, x.shape)
+
+            fraction = (model_variance + 1) / 2.0
             log_variance = fraction * log1 + (1 - fraction) * log2
             variance = torch.exp(log_variance)
         else:
 
             if self.config["sigma"] == "fixed_small":
-                variance, log_variance = self.schedular.posterior_variance, self.schedular.posterior_log_variance_clipped
+
+                log_variance = self.schedular.posterior_log_variance_clipped
+                variance = self.schedular.posterior_variance
             else:
-                
-                variance = np.append(self.schedular.posterior_variance[1], self.schedular.betas[1:]), 
-                log_variance = np.log(variance)
+                variance = np.append(self.schedular.posterior_variance[1], self.schedular.betas[1:]),
+                log_variance = np.log(np.append(self.schedular.posterior_variance[1], self.schedular.betas[1:]))
             
             variance = extract_tensor_from_value(variance, t, x.shape)
             log_variance = extract_tensor_from_value(log_variance, t, x.shape)
@@ -105,19 +107,45 @@ class GaussianDiffusion:
         if self.config["model_output"] == "start_x":
             pred_x_start = self.process_state(model_output, denoised_clip, denoise_fun)
         else:
-            pred_x_start = self.calculate_x_start_from_epsilon(x, t, epsilon= model_output)
+            pred_x_start = self.process_state(self.calculate_x_start_from_epsilon(x, t, epsilon=model_output), denoised_clip, denoise_fun)
+        
+        model_mean, _, _ = self.q_posterior_mean_variance(x, pred_x_start, t)
 
-        model_mean, _, _ = self.q_posterior_mean_variance(x_start=pred_x_start, x_t=x, t=t)
-
-        assert model_mean.shape == log_variance.shape == pred_x_start.shape == x.shape
         return {
             "mean": model_mean,
-            "variance": variance,
+            "variance": model_variance,
             "log_variance": log_variance,
             "pred_xstart": pred_x_start,
             "extra": extra,
         }
+    
+    def p_sample(self, model, x, t, denoised_clip: bool = False, denoise_fun = None, model_kwargs=None):
 
+        output = self.p_mean_variance(model, x, t, denoised_clip, denoise_fun, model_kwargs)
+        noise = torch.randn_like(x, dtype=torch.float32)
+        nonzero_mask = ((t != 0).float().view(-1, *([1] * (len(x.shape) - 1))))  # no noise when t == 0
+        sample = output["mean"] + nonzero_mask * torch.exp(0.5 * output["log_variance"]) * noise
+        return {"sample": sample, "pred_xstart": output["pred_xstart"]}
+    
+    def p_reverse(self, model, shape, noise = None, denoised_clip: bool = False, denoise_fun = None, model_kwargs=None):
+
+        assert isinstance(shape, (tuple, list))
+
+        timesteps = list(reversed(range(self.config["schedular"]["diffusion_steps"])))
+
+        if noise is None:
+            img = torch.randn_like(*shape, dtype=torch.float32)
+        else:
+            img = noise
+
+        for t in timesteps:
+
+            output = self.p_sample(model, img, t, denoised_clip, denoise_fun, model_kwargs)
+            img = output["sample"]
+
+        return img
+
+    
 
         
         
