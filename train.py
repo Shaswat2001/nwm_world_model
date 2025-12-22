@@ -41,7 +41,8 @@ def main(args):
     os.makedirs(config['results_dir'], exist_ok=True)  # Make results folder (holds all experiment subfolders)
     experiment_dir = f"{config['results_dir']}/{config['run_name']}"  # Create an experiment folder
     checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
-
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
     tokenizer = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-ema").to(device)
     latent_size = config['image_size'] // 8
 
@@ -177,6 +178,23 @@ def main(args):
 
                 running_loss = 0
                 log_steps = 0
+
+            if global_step % args.ckpt_every == 0 and global_step > 0:
+                checkpoint = {
+                    "model": model.state_dict(),
+                    "ema": target_model.state_dict(),
+                    "opt": opt.state_dict(),
+                    "args": args,
+                    "epoch": epoch,
+                    "train_steps": global_step
+                }
+                checkpoint_path = f"{checkpoint_dir}/latest.pth.tar"
+                torch.save(checkpoint, checkpoint_path)
+                if global_step % (10*args.ckpt_every) == 0 and global_step > 0:
+                    checkpoint_path = f"{checkpoint_dir}/{global_step:07d}.pth.tar"
+                    torch.save(checkpoint, checkpoint_path)
+                print(f"Saved checkpoint to {checkpoint_path}")
+
 
     if args.wandb:
         wandb.finish()
