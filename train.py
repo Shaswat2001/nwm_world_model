@@ -11,7 +11,7 @@ from diffusers.models import AutoencoderKL
 import torch
 from torch.utils.data import DataLoader, ConcatDataset
 
-from diffusion import create_diffusion
+from diffusion_orig import create_diffusion
 from utils import requires_grad, update_target_networks, transform
 
 def main(args):
@@ -180,6 +180,12 @@ def main(args):
 
     if args.wandb:
         wandb.finish()
+
+
+@torch.no_grad
+def evaluate():
+
+    pass
 
 if __name__ == "__main__":
 

@@ -1,0 +1,8 @@
+model_output: "epsilon" #  ["epsilon", "start_x", "previous_x"]
+loss_type: "kl" # ["kl", "mse"]
+sigma: "fixed_small" # ["learned", "learned_scaled", "fixed_small", "fixed_large"]
+schedular:
+  type: "linear"
+  beta_start: 0.0001
+  beta_end: 0.002
+  diffusion_steps: 1000
