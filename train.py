@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import DataLoader, ConcatDataset
 
 from diffusion import GaussianDiffusion
-from utils import requires_grad, update_target_networks, transform
+from utils import requires_grad, update_target_networks, transform, nwm_model_forward
 
 def main(args):
     
@@ -42,7 +42,7 @@ def main(args):
     experiment_dir = f"{config['results_dir']}/{config['run_name']}"  # Create an experiment folder
     checkpoint_dir = f"{experiment_dir}/checkpoints"  # Stores saved model checkpoints
     os.makedirs(checkpoint_dir, exist_ok=True)
-    
+
     tokenizer = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-ema").to(device)
     latent_size = config['image_size'] // 8
 

@@ -153,22 +153,25 @@ class EvalDatasetLoader(BaseDatasetLoader):
 
     def __getitem__(self, i):
 
-        trajectory_name, current_time, min_distance, max_distance = self.dataset[i]
-        goal_offsets = np.random.randint(min_distance, max_distance, size=(self.goals_per_obs))
-        goal_times = current_time + goal_offsets
-        relative_time = goal_offsets.astype("float") / 128.0
-
+        trajectory_name, current_time,  min_distance, max_distance = self.dataset[i]
         context_times = list(range(current_time - self.context_size + 1, current_time + 1))
-        context = [(trajectory_name, t) for t in context_times] + [(trajectory_name, t) for t in goal_times]
+        goal_times = list(range(current_time + 1, current_time + self.len_traj_pred + 1))
+
+        context = [(trajectory_name, t) for t in context_times]
+        goals = [(trajectory_name, t) for t in goal_times]
 
         obs_image = torch.stack([self.transform(Image.open(get_image_path(self.dataset_dir, f, t))) for f, t in context])
+        goal_image = torch.stack([self.transform(Image.open(get_image_path(self.dataset_dir, f, t))) for f, t in goals])
 
         trajectory_data = self.load_trajectory(trajectory_name)
-        _, goal_pos = self._compute_actions(trajectory_data, current_time, goal_times)
-        goal_pos[:, :2] = normalize_data(goal_pos[:, :2], self.ACTION_STATS)
+
+        actions, _ = self._compute_actions(trajectory_data, current_time, goal_times)
+        actions[:, :2] = normalize_data(actions[:, :2], self.ACTION_STATS)
+        delta = get_delta_np(actions)
 
         return (
+                torch.as_tensor([i], dtype=torch.float32),
                 torch.as_tensor(obs_image, dtype=torch.float32),
-                torch.as_tensor(goal_pos, dtype=torch.float32),
-                torch.as_tensor(relative_time, dtype=torch.float32),
+                torch.as_tensor(goal_image, dtype=torch.float32),
+                torch.as_tensor(delta, dtype=torch.float32),
             )
