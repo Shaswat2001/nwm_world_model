@@ -209,7 +209,8 @@ def main(args):
                         },
                         step=global_step,
                     )
-
+    model.eval()
+    
     if args.wandb:
         wandb.finish()
 
