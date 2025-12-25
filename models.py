@@ -7,7 +7,6 @@ from timm.models.vision_transformer import PatchEmbed, Attention, Mlp
 def modulate(x, shift, scale):
     return x * (1 + scale.unsqueeze(1)) + shift.unsqueeze(1)
 
-
 class TimeStepEmbedder(nn.Module):
 
     def __init__(self, hidden_size: int, frequency_emb_size: int = 256):

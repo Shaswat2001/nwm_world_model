@@ -9,6 +9,8 @@ from data_loader import TrainingDatasetLoader
 from diffusers.models import AutoencoderKL
 
 import torch
+from torch import distributed
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, ConcatDataset
 
 from diffusion import GaussianDiffusion
@@ -195,15 +197,70 @@ def main(args):
                     torch.save(checkpoint, checkpoint_path)
                 print(f"Saved checkpoint to {checkpoint_path}")
 
+            if global_step % args.eval_every == 0 and global_step > 0:
+                save_dir = os.path.join(experiment_dir, str(global_step))
+                sim_score = evaluate(target_model, tokenizer, diffusion, test_dataset, config["batch_size"], latent_size, device, save_dir, num_cond)
+                distributed.barrier()
+
+                if args.wandb:
+                    wandb.log(
+                        {
+                            "test/percep_loss": sim_score,
+                        },
+                        step=global_step,
+                    )
 
     if args.wandb:
         wandb.finish()
 
-
 @torch.no_grad
-def evaluate():
+def evaluate(model, vae, diffusion, test_dataloaders, batch_size, latent_size, device, save_dir, num_cond):
+    
 
-    pass
+    loader = DataLoader(
+        test_dataloaders,
+        batch_size=batch_size,
+        shuffle=False,
+        pin_memory=True,
+        drop_last=True
+    )
+    from dreamsim import dreamsim
+    eval_model, _ = dreamsim(pretrained=True)
+    score = torch.tensor(0.).to(device)
+    n_samples = torch.tensor(0).to(device)
+
+    # Run for 1 step
+    for x, y, rel_t in loader:
+        x = x.to(device)
+        y = y.to(device)
+        rel_t = rel_t.to(device).flatten(0, 1)
+        with torch.amp.autocast('cuda', enabled=True, dtype=torch.bfloat16):
+            B, T = x.shape[:2]
+            num_goals = T - num_cond
+            samples = nwm_model_forward((model, vae, diffusion), x, y, num_timesteps=None, latent_size=latent_size, device=device, num_cond=num_cond, num_goals=num_goals, rel_t=rel_t)
+            x_start_pixels = x[:, num_cond:].flatten(0, 1)
+            x_cond_pixels = x[:, :num_cond].unsqueeze(1).expand(B, num_goals, num_cond, x.shape[2], x.shape[3], x.shape[4]).flatten(0, 1)
+            samples = samples * 0.5 + 0.5
+            x_start_pixels = x_start_pixels * 0.5 + 0.5
+            x_cond_pixels = x_cond_pixels * 0.5 + 0.5
+            res = eval_model(x_start_pixels, samples)
+            score += res.sum()
+            n_samples += len(res)
+        break
+    
+    os.makedirs(save_dir, exist_ok=True)
+    for i in range(min(samples.shape[0], 10)):
+        _, ax = plt.subplots(1,3,dpi=256)
+        ax[0].imshow((x_cond_pixels[i, -1].permute(1,2,0).cpu().numpy()*255).astype('uint8'))
+        ax[1].imshow((x_start_pixels[i].permute(1,2,0).cpu().numpy()*255).astype('uint8'))
+        ax[2].imshow((samples[i].permute(1,2,0).cpu().float().numpy()*255).astype('uint8'))
+        plt.savefig(f'{save_dir}/{i}.png')
+        plt.close()
+
+    distributed.all_reduce(score)
+    distributed.all_reduce(n_samples)
+    sim_score = score/n_samples
+    return sim_score
 
 if __name__ == "__main__":
 
